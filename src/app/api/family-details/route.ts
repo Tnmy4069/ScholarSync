@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       ]
     );
 
-    // Check if any row was affected
+    // Check if any row was affected...
     const affectedRows = (result as any).affectedRows;
     if (affectedRows === 0) {
       throw new Error(`No application found with ID ${applicationId}`);
