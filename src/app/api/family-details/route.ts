@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
 import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
+import { ResultSetHeader } from 'mysql2/promise';
 
 export async function POST(request: Request) {
   let connection;
@@ -40,7 +41,12 @@ export async function POST(request: Request) {
       throw new Error('No existing application found');
     }
 
-    const applicationId = (applications[0] as any).id;
+    interface Application {
+      id: number;
+    }
+    
+    const applicationId = (applications as Application[])[0]?.id;
+    
 
     // Handle file upload if present
     let marksheetPath = null;
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
     }
 
     // Update scholarship application with family details
-    const [result] = await connection.execute(
+    const [result] = await connection.execute<ResultSetHeader>(
       `UPDATE scholarship_applications SET
         student_salaried = ?,
         father_alive = ?,
@@ -97,7 +103,9 @@ export async function POST(request: Request) {
     );
 
     // Check if any row was affected...
-    const affectedRows = (result as any).affectedRows;
+    const affectedRows = result.affectedRows; 
+
+    
     if (affectedRows === 0) {
       throw new Error(`No application found with ID ${applicationId}`);
     }
