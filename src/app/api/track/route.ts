@@ -68,7 +68,7 @@ export async function GET(request: Request) {
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || 'scholarship_db',
-      connectTimeout: 10000, // 10 seconds timeout
+      connectTimeout: 20000, // 20 seconds timeout
     });
 
     console.log('Database connected successfully');

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
-      database: 'scholarship_db',
+      database: 'sql12769537',
     });
 
     // Start transaction
