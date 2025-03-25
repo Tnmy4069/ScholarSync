@@ -26,19 +26,49 @@ export async function GET(request: Request) {
 
   if (!id) {
     return NextResponse.json(
-      { error: 'Application ID is required' },
+      { 
+        error: 'Application ID is required',
+        code: 'VALIDATION_ERROR',
+        details: 'Please provide a valid application ID'
+      },
+      { status: 400 }
+    );
+  }
+
+  // Validate that id is numeric
+  if (!/^\d+$/.test(id)) {
+    return NextResponse.json(
+      {
+        error: 'Invalid Application ID format',
+        code: 'VALIDATION_ERROR',
+        details: 'Application ID must be a number'
+      },
       { status: 400 }
     );
   }
 
   let connection;
   try {
+    // Check if required environment variables are set
+    if (!process.env.DB_HOST || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+      console.error('Missing database configuration');
+      return NextResponse.json(
+        {
+          error: 'Server configuration error',
+          code: 'CONFIG_ERROR',
+          details: 'Database configuration is incomplete'
+        },
+        { status: 500 }
+      );
+    }
+
     // Create MySQL connection
     connection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'localhost',
-      user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
-      database: 'scholarship_db'
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || 'scholarship_db',
+      connectTimeout: 10000, // 10 seconds timeout
     });
 
     console.log('Database connected successfully');
@@ -70,15 +100,33 @@ export async function GET(request: Request) {
 
     console.log('Query executed, rows:', rows);
 
-    if (rows.length === 0) {
+    if (!Array.isArray(rows) || rows.length === 0) {
       console.log('No application found with ID:', id);
       return NextResponse.json(
-        { error: 'Application not found' },
+        { 
+          error: 'Application not found',
+          code: 'NOT_FOUND',
+          details: `No application found with ID ${id}`
+        },
         { status: 404 }
       );
     }
 
     const applicationData = rows[0];
+    
+    // Validate required fields
+    if (!applicationData.id || !applicationData.name) {
+      console.error('Invalid application data:', applicationData);
+      return NextResponse.json(
+        {
+          error: 'Invalid application data',
+          code: 'DATA_ERROR',
+          details: 'Application data is incomplete or corrupted'
+        },
+        { status: 500 }
+      );
+    }
+
     console.log('Application data found:', applicationData);
 
     // Format the response data
@@ -109,11 +157,47 @@ export async function GET(request: Request) {
       stack: error instanceof Error ? error.stack : undefined,
     });
 
+    // Handle specific MySQL errors
+    if (error instanceof Error) {
+      if (error.message.includes('ECONNREFUSED')) {
+        return NextResponse.json(
+          { 
+            error: 'Database connection failed',
+            details: 'Could not connect to the database server',
+            code: 'CONNECTION_ERROR'
+          },
+          { status: 503 }
+        );
+      }
+      
+      if (error.message.includes('ER_NO_SUCH_TABLE')) {
+        return NextResponse.json(
+          { 
+            error: 'Database error',
+            details: 'Required table does not exist',
+            code: 'TABLE_ERROR'
+          },
+          { status: 500 }
+        );
+      }
+
+      if (error.message.includes('ER_ACCESS_DENIED_ERROR')) {
+        return NextResponse.json(
+          {
+            error: 'Database authentication failed',
+            details: 'Invalid database credentials',
+            code: 'AUTH_ERROR'
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json(
       { 
         error: 'Failed to fetch application details',
-        details: error instanceof Error ? error.message : 'Database connection failed',
-        code: 'DB_ERROR'
+        details: error instanceof Error ? error.message : 'An unexpected error occurred',
+        code: 'UNKNOWN_ERROR'
       },
       { status: 500 }
     );

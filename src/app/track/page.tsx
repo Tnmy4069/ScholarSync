@@ -44,31 +44,97 @@ export default function TrackApplication() {
         setError(null);
         setApplicationData(null);
 
-        const response = await fetch(`/api/track?id=${values.applicationId}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
+        // Add timeout to fetch request
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+        try {
+          const response = await fetch(`/api/track?id=${values.applicationId}`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Cache-Control': 'no-cache',
+            },
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          let data;
+          try {
+            data = await response.json();
+          } catch (parseError) {
+            console.error('Error parsing response:', parseError);
+            throw new Error('Invalid response from server');
+          }
+
+          if (!response.ok) {
+            let errorMessage = 'Failed to fetch application details';
+            
+            if (data && typeof data === 'object') {
+              // Handle specific error codes
+              switch (data.code) {
+                case 'NOT_FOUND':
+                  errorMessage = `Application with ID ${values.applicationId} was not found`;
+                  break;
+                case 'CONNECTION_ERROR':
+                  errorMessage = 'Unable to connect to the database. Please try again later';
+                  break;
+                case 'TABLE_ERROR':
+                  errorMessage = 'Database configuration error. Please contact support';
+                  break;
+                default:
+                  errorMessage = data.error || data.details || errorMessage;
+              }
+            }
+
+            console.error('API Error:', {
+              status: response.status,
+              statusText: response.statusText,
+              data: data
+            });
+            
+            throw new Error(errorMessage);
+          }
+
+          // Validate the response data
+          if (!data || typeof data !== 'object') {
+            console.error('Invalid response format:', data);
+            throw new Error('Invalid response format received');
+          }
+
+          if (!data.id || !data.name) {
+            console.error('Incomplete data:', data);
+            throw new Error('Incomplete application data received');
+          }
+
+          setApplicationData(data);
+          toast.success('Application details fetched successfully');
+        } catch (fetchError: any) {
+          if (fetchError.name === 'AbortError') {
+            throw new Error('Request timed out. Please try again.');
+          }
+          throw fetchError;
+        }
+      } catch (error: any) {
+        console.error('Error fetching application:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
         });
 
-        const data = await response.json();
+        let errorMessage: string;
 
-        if (!response.ok) {
-          const errorMessage = data.error || data.details || 'Failed to fetch application details';
-          console.error('API Error:', data);
-          throw new Error(errorMessage);
+        if (!navigator.onLine) {
+          errorMessage = 'No internet connection. Please check your network and try again.';
+        } else if (error instanceof TypeError && error.message === 'Failed to fetch') {
+          errorMessage = 'Unable to connect to the server. Please try again later.';
+        } else {
+          errorMessage = error.message || 'Failed to fetch application details';
         }
 
-        // Validate the response data
-        if (!data.id || !data.name) {
-          throw new Error('Invalid application data received');
-        }
-
-        setApplicationData(data);
-      } catch (error: any) {
-        console.error('Error fetching application:', error);
-        setError(error.message || 'Failed to fetch application details');
-        toast.error(error.message || 'Failed to fetch application details');
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }
