@@ -18,7 +18,7 @@ const Navbar = () => {
               href="/"
               className="flex items-center text-white text-lg font-semibold"
             >
-              MahaDBT Scholarship
+            ScholarSync
             </Link>
           </div>
 
